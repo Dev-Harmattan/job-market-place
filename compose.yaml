@@ -76,8 +76,6 @@ services:
       - '9200:9200'
     volumes:
       - ./docker-volumes/elasticsearch-data:/usr/share/elasticsearch/data
-    networks:
-      - elastic
   kibana:
     container_name: kibana_container
     image: docker.elastic.co/kibana/kibana:8.11.3
@@ -85,18 +83,67 @@ services:
     volumes:
       - ./kibana.yml:/usr/share/kibana/config/kibana.yml:ro
     environment:
+      - elasticsearch.username=kibana_system
+      - elasticsearch.password=kibana
       - ELASTICSEARCH_HOSTS=["http://elasticsearch_container:9200"]
       - ELASTICSEARCH_USERNAME=kibana_system
       - ELASTICSEARCH_PASSWORD=kibana
-      - ELASTICSEARCH_SERVICEACCOUNT_TOKEN=AAEAAWVsYXN0aWMva2liYW5hL2pvYmJlci1raWJhbmE6S3Z1MVZCTEFTYWFTTUpzWFpxbW5pdw
+      - ELASTICSEARCH_SERVICEACCOUNT_TOKEN=AAEAAWVsYXN0aWMva2liYW5hL2pvYmJlci1raWJhbmE6Ulo2MUdNZ2JUQ0dpT0Y5TkNnWm8xUQ
       - XPACK_FLEET_AGENT_ELASTICSEARCH_HOST=["http://elasticsearch_container:9200"]
     ports:
       - '5601:5601'
-    networks:
-      - elastic
     depends_on:
       - elasticsearch
-
-networks:
-  elastic:
-    name: elastic
+  notifications:
+    container_name: notification_container
+    build:
+      context: ../notification-service
+      dockerfile: Dockerfile.dev
+    restart: always
+    # env_file:
+    #   - ../notification-service/.env
+    environment:
+      - ENABLE_APM=0
+      - NODE_ENV=development
+      - CLIENT_URL=http://localhost:3000
+      - RABBITMQ_ENDPOINT=amqp://jobber:jobberpass@rabbitmq_container:5672
+      - SENDER_EMAIL=augusta.bechtelar@ethereal.email
+      - SENDER_EMAIL_PASSWORD=ubC2DJhj8gAuJU7mxX
+      - ELASTIC_SEARCH_URL=http://elasticsearch_container:9200
+      - ELASTIC_APM_SERVER_URL=http://localhost:8200
+      - ELASTIC_APM_SECRET_TOKEN=AAEAAWVsYXN0aWMva2liYW5hL2pvYmJlci1raWJhbmE6Ulo2MUdNZ2JUQ0dpT0Y5TkNnWm8xUQ
+    ports:
+      - '4001:4001'
+    depends_on:
+      - elasticsearch
+      - rabbitmq
+  gateway:
+    container_name: gateway_container
+    build:
+      context: ../gateway-service
+      dockerfile: Dockerfile.dev
+    restart: always
+    # env_file:
+    #   - ../gateway-service/.env
+    environment:
+      - ENABLE_APM=0
+      - GATEWAY_JWT_TOKEN=dee25ff1c4ce10a49088972439812ba1
+      - JWT_TOKEN=869dc18efc49aba08ec7eb37a37ac678
+      - NODE_ENV=development
+      - SECRET_KEY_ONE=865c5845ca336d831072956bed7b4427
+      - SECRET_KEY_TWO=5ca4501105d297eda7fafc3cc8290931
+      - CLIENT_URL=http://localhost:3000
+      - AUTH_BASE_URL=http://localhost:4002
+      - USERS_BASE_URL=http://localhost:4003
+      - GIG_BASE_URL=http://localhost:4004
+      - MESSAGE_BASE_URL=http://localhost:4005
+      - ORDER_BASE_URL=http://localhost:4006
+      - REVIEW_BASE_URL=http://localhost:4007
+      - REDIS_HOST=redis://localhost:6379
+      - ELASTIC_SEARCH_URL=http://elasticsearch_container:9200
+      - ELASTIC_APM_SERVER_URL=http://localhost:8200
+      - ELASTIC_APM_SECRET_TOKEN=AAEAAWVsYXN0aWMva2liYW5hL2pvYmJlci1raWJhbmE6Ulo2MUdNZ2JUQ0dpT0Y5TkNnWm8xUQ
+    ports:
+      - '4000:4000'
+    depends_on:
+      - elasticsearch
